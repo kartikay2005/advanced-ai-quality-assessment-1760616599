@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Crypto Tracker</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            transition: background-color 0.3s, color 0.3s;
+        }
+        .dark-theme {
+            background-color: #121212;
+            color: #ffffff;
+        }
+        header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px 20px;
+            background-color: #282c34;
+            color: white;
+        }
+        .search-input {
+            padding: 5px;
+            border-radius: 5px;
+            border: 1px solid #ccc;
+        }
+        .crypto-container {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            padding: 20px;
+        }
+        .crypto-card {
+            background-color: #f9f9f9;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            margin: 10px;
+            padding: 15px;
+            width: calc(33% - 40px);
+            transition: transform 0.2s;
+        }
+        .crypto-card:hover {
+            transform: translateY(-5px);
+        }
+        .price-up {
+            color: green;
+        }
+        .price-down {
+            color: red;
+        }
+        .loading-spinner {
+            border: 4px solid rgba(0,0,0,0.1);
+            border-left-color: #09f;
+            border-radius: 50%;
+            width: 24px;
+            height: 24px;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        .error-message {
+            color: red;
+            text-align: center;
+        }
+        @media (max-width: 768px) {
+            .crypto-card {
+                width: calc(50% - 40px);
+            }
+        }
+        @media (max-width: 480px) {
+            .crypto-card {
+                width: calc(100% - 40px);
+            }
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <h1>Crypto Tracker</h1>
+        <input type="text" class="search-input" placeholder="Search..." aria-label="Search cryptocurrencies">
+        <button id="theme-toggle" aria-label="Toggle dark/light theme">Toggle Theme</button>
+    </header>
+    <div class="crypto-container" aria-live="polite">
+        <div class="loading-spinner"></div>
+    </div>
+    <canvas id="price-chart" aria-label="Cryptocurrency price trends"></canvas>
+    <div class="error-message" role="alert"></div>
+
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', async () => {
+            const apiUrl = 'https://api.coingecko.com/api/v3/coins/markets?vs_currency=usd&order=market_cap_desc&per_page=10&page=1&sparkline=false';
+            const cryptoContainer = document.querySelector('.crypto-container');
+            const errorMessage = document.querySelector('.error-message');
+            const themeToggle = document.getElementById('theme-toggle');
+            const searchInput = document.querySelector('.search-input');
+            
+            let isDarkTheme = false;
+
+            themeToggle.addEventListener('click', () => {
+                isDarkTheme = !isDarkTheme;
+                document.body.classList.toggle('dark-theme', isDarkTheme);
+                localStorage.setItem('theme', isDarkTheme ? 'dark' : 'light');
+            });
+
+            searchInput.addEventListener('input', (e) => {
+                const query = e.target.value.toLowerCase();
+                document.querySelectorAll('.crypto-card').forEach(card => {
+                    const name = card.getAttribute('data-name').toLowerCase();
+                    card.style.display = name.includes(query) ? 'block' : 'none';
+                });
+            });
+
+            async function fetchCryptoData() {
+                try {
+                    const response = await fetch(apiUrl);
+                    if (!response.ok) throw new Error('Failed to fetch data');
+                    const data = await response.json();
+                    displayCryptoData(data);
+                    setupChart(data);
+                } catch (error) {
+                    errorMessage.textContent = error.message;
+                } finally {
+                    document.querySelector('.loading-spinner').style.display = 'none';
+                }
+            }
+
+            function displayCryptoData(data) {
+                cryptoContainer.innerHTML = '';
+                data.forEach(crypto => {
+                    const card = document.createElement('div');
+                    card.className = 'crypto-card';
+                    card.setAttribute('data-name', crypto.name);
+                    card.innerHTML = `
+                        <h2>${crypto.name} (${crypto.symbol.toUpperCase()})</h2>
+                        <p>Price: $${crypto.current_price.toFixed(2)}</p>
+                        <p class="${crypto.price_change_percentage_24h >= 0 ? 'price-up' : 'price-down'}">
+                            Change (24h): ${crypto.price_change_percentage_24h.toFixed(2)}%
+                        </p>
+                    `;
+                    cryptoContainer.appendChild(card);
+                });
+                if (data.length >= 3) {
+                    localStorage.setItem('favoriteCryptos', JSON.stringify(data.slice(0, 3)));
+                }
+            }
+
+            function setupChart(data) {
+                const ctx = document.getElementById('price-chart').getContext('2d');
+                new Chart(ctx, {
+                    type: 'line',
+                    data: {
+                        labels: data.map(crypto => crypto.name),
+                        datasets: [{
+                            label: 'Price in USD',
+                            data: data.map(crypto => crypto.current_price),
+                            borderColor: 'rgba(75,192,192,1)',
+                            fill: false
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        scales: {
+                            xAxes: [{ display: true }],
+                            yAxes: [{ display: true }]
+                        }
+                    }
+                });
+            }
+
+            fetchCryptoData();
+
+            if (localStorage.getItem('theme') === 'dark') {
+                document.body.classList.add('dark-theme');
+                isDarkTheme = true;
+            }
+        });
+    </script>
+</body>
+</html>
